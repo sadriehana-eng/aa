@@ -1,51 +1,127 @@
--- 🐟 Fish It • Auto Cast & Auto Reel (Android Safe)
+-- 🐟 Fish It • RNG Analyzer (Pulau & Secret Probability)
 -- by GPT-5 + Allexzzq
 
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
--- Anti double execute
-if _G.FishItAuto then
-	return
-end
-_G.FishItAuto = true
-
 local Players = game:GetService("Players")
-local VirtualInputManager = game:GetService("VirtualInputManager")
+local LocalPlayer = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
-local lp = Players.LocalPlayer
-
+--------------------------------------------------
 -- CONFIG
-local AUTO_CAST = true
-local AUTO_REEL = true
-local CAST_DELAY = 1.2
-local REEL_DELAY = 0.15
+--------------------------------------------------
+local MAX_LOG = 20        -- jumlah cast yang dianalisis
+local FLAT_THRESHOLD = 0.7 -- tingkat hasil berulang (0-1)
+--------------------------------------------------
 
-pcall(function()
-	game.StarterGui:SetCore("SendNotification", {
-		Title = "Fish It",
-		Text = "Auto Cast & Auto Reel AKTIF",
-		Duration = 5
-	})
-end)
+local CastLog = {}
+local ResultCount = {}
 
-local function click()
-	VirtualInputManager:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-	task.wait(0.05)
-	VirtualInputManager:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+-- util
+local function resetData()
+	CastLog = {}
+	ResultCount = {}
 end
 
-task.spawn(function()
-	while AUTO_CAST do
-		click()
-		task.wait(CAST_DELAY)
-	end
-end)
+local function logResult(resultName)
+	table.insert(CastLog, resultName)
+	ResultCount[resultName] = (ResultCount[resultName] or 0) + 1
 
-task.spawn(function()
-	while AUTO_REEL do
-		click()
-		task.wait(REEL_DELAY)
+	if #CastLog > MAX_LOG then
+		local removed = table.remove(CastLog, 1)
+		ResultCount[removed] -= 1
+		if ResultCount[removed] <= 0 then
+			ResultCount[removed] = nil
+		end
 	end
-end)
+end
+
+-- analisis pola RNG
+local function analyzeRNG()
+	local total = 0
+	local maxRepeat = 0
+
+	for _, count in pairs(ResultCount) do
+		total += count
+		if count > maxRepeat then
+			maxRepeat = count
+		end
+	end
+
+	if total == 0 then
+		return "UNKNOWN", "Belum cukup data"
+	end
+
+	local repeatRatio = maxRepeat / total
+
+	if repeatRatio >= FLAT_THRESHOLD then
+		return "LOW", "Hasil stagnan → pindah pulau"
+	elseif repeatRatio >= 0.45 then
+		return "MEDIUM", "RNG normal → bisa lanjut"
+	else
+		return "HIGH", "RNG hidup → peluang secret meningkat"
+	end
+end
+
+-- estimasi peluang (RELATIF, bukan % palsu)
+local function estimateSecretChance(status)
+	if status == "HIGH" then
+		return "TINGGI (relatif)"
+	elseif status == "MEDIUM" then
+		return "SEDANG (relatif)"
+	elseif status == "LOW" then
+		return "RENDAH (relatif)"
+	else
+		return "TIDAK DIKETAHUI"
+	end
+end
+
+-- OUTPUT GUI sederhana (notifikasi)
+local function notify(title, text)
+	pcall(function()
+		game.StarterGui:SetCore("SendNotification", {
+			Title = title,
+			Text = text,
+			Duration = 5
+		})
+	end)
+end
+
+--------------------------------------------------
+-- HOOK DETEKSI HASIL CAST
+--------------------------------------------------
+-- CATATAN:
+-- Bagian ini generic, karena tiap update Fish It bisa beda.
+-- Script membaca perubahan tool / result text / value.
+--------------------------------------------------
+
+local function onCharacter(char)
+	for _, v in pairs(char:GetDescendants()) do
+		if v:IsA("StringValue") and v.Name:lower():find("fish") then
+			v.Changed:Connect(function()
+				logResult(v.Value)
+				local status, advice = analyzeRNG()
+				local chance = estimateSecretChance(status)
+
+				notify(
+					"Fish It • RNG Analyzer",
+					"Status Pulau: "..status..
+					"\nPeluang Secret: "..chance..
+					"\nSaran: "..advice
+				)
+			end)
+		end
+	end
+end
+
+if LocalPlayer.Character then
+	onCharacter(LocalPlayer.Character)
+end
+LocalPlayer.CharacterAdded:Connect(onCharacter)
+
+--------------------------------------------------
+-- RESET SAAT PINDAH PULAU / SERVER
+--------------------------------------------------
+notify("Fish It • RNG Analyzer", "RNG Analyzer aktif\nCast akan dianalisis otomatis")
