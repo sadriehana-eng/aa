@@ -1,127 +1,74 @@
--- 🐟 Fish It • RNG Analyzer (Pulau & Secret Probability)
+-- 🐟 Fish It • RNG Analyzer UI | Script Loader
 -- by GPT-5 + Allexzzq
 
 if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
+-- RAW SCRIPT ANALYZER
+local SCRIPT_URL = "https://raw.githubusercontent.com/sadriehana-eng/aa/refs/heads/main/foxnafefishit.Iua"
+
+-- ================= UI PANEL =================
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
-local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
 
---------------------------------------------------
--- CONFIG
---------------------------------------------------
-local MAX_LOG = 20        -- jumlah cast yang dianalisis
-local FLAT_THRESHOLD = 0.7 -- tingkat hasil berulang (0-1)
---------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "FishItRNG_UI"
+gui.ResetOnSpawn = false
+gui.Parent = lp:WaitForChild("PlayerGui")
 
-local CastLog = {}
-local ResultCount = {}
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.fromScale(0.28, 0.22)
+frame.Position = UDim2.fromScale(0.02, 0.6)
+frame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
 
--- util
-local function resetData()
-	CastLog = {}
-	ResultCount = {}
-end
+local corner = Instance.new("UICorner", frame)
+corner.CornerRadius = UDim.new(0, 14)
 
-local function logResult(resultName)
-	table.insert(CastLog, resultName)
-	ResultCount[resultName] = (ResultCount[resultName] or 0) + 1
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.fromScale(1, 0.22)
+title.BackgroundTransparency = 1
+title.Text = "🎣 Fish It • RNG Analyzer"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextScaled = true
 
-	if #CastLog > MAX_LOG then
-		local removed = table.remove(CastLog, 1)
-		ResultCount[removed] -= 1
-		if ResultCount[removed] <= 0 then
-			ResultCount[removed] = nil
-		end
+local info = Instance.new("TextLabel", frame)
+info.Position = UDim2.fromScale(0, 0.25)
+info.Size = UDim2.fromScale(1, 0.75)
+info.BackgroundTransparency = 1
+info.TextWrapped = true
+info.TextYAlignment = Top
+info.TextXAlignment = Left
+info.Font = Enum.Font.Gotham
+info.TextScaled = true
+info.TextColor3 = Color3.fromRGB(200, 200, 200)
+info.Text =
+	"Status Pulau : UNKNOWN\n"..
+	"Peluang Secret : ?\n"..
+	"Cast Dianalisis : 0\n\n"..
+	"Menunggu data..."
+
+-- expose UI untuk script utama
+_G.FishItRNG_UI = {
+	Update = function(status, chance, cast, advice)
+		info.Text =
+			"Status Pulau : "..status..
+			"\nPeluang Secret : "..chance..
+			"\nCast Dianalisis : "..cast..
+			"\n\n"..advice
 	end
+}
+
+-- ================= LOAD SCRIPT =================
+local success, err = pcall(function()
+	loadstring(game:HttpGet(SCRIPT_URL, true))()
+end)
+
+if not success then
+	info.Text = "GAGAL LOAD SCRIPT\nCek RAW URL"
+	warn(err)
 end
-
--- analisis pola RNG
-local function analyzeRNG()
-	local total = 0
-	local maxRepeat = 0
-
-	for _, count in pairs(ResultCount) do
-		total += count
-		if count > maxRepeat then
-			maxRepeat = count
-		end
-	end
-
-	if total == 0 then
-		return "UNKNOWN", "Belum cukup data"
-	end
-
-	local repeatRatio = maxRepeat / total
-
-	if repeatRatio >= FLAT_THRESHOLD then
-		return "LOW", "Hasil stagnan → pindah pulau"
-	elseif repeatRatio >= 0.45 then
-		return "MEDIUM", "RNG normal → bisa lanjut"
-	else
-		return "HIGH", "RNG hidup → peluang secret meningkat"
-	end
-end
-
--- estimasi peluang (RELATIF, bukan % palsu)
-local function estimateSecretChance(status)
-	if status == "HIGH" then
-		return "TINGGI (relatif)"
-	elseif status == "MEDIUM" then
-		return "SEDANG (relatif)"
-	elseif status == "LOW" then
-		return "RENDAH (relatif)"
-	else
-		return "TIDAK DIKETAHUI"
-	end
-end
-
--- OUTPUT GUI sederhana (notifikasi)
-local function notify(title, text)
-	pcall(function()
-		game.StarterGui:SetCore("SendNotification", {
-			Title = title,
-			Text = text,
-			Duration = 5
-		})
-	end)
-end
-
---------------------------------------------------
--- HOOK DETEKSI HASIL CAST
---------------------------------------------------
--- CATATAN:
--- Bagian ini generic, karena tiap update Fish It bisa beda.
--- Script membaca perubahan tool / result text / value.
---------------------------------------------------
-
-local function onCharacter(char)
-	for _, v in pairs(char:GetDescendants()) do
-		if v:IsA("StringValue") and v.Name:lower():find("fish") then
-			v.Changed:Connect(function()
-				logResult(v.Value)
-				local status, advice = analyzeRNG()
-				local chance = estimateSecretChance(status)
-
-				notify(
-					"Fish It • RNG Analyzer",
-					"Status Pulau: "..status..
-					"\nPeluang Secret: "..chance..
-					"\nSaran: "..advice
-				)
-			end)
-		end
-	end
-end
-
-if LocalPlayer.Character then
-	onCharacter(LocalPlayer.Character)
-end
-LocalPlayer.CharacterAdded:Connect(onCharacter)
-
---------------------------------------------------
--- RESET SAAT PINDAH PULAU / SERVER
---------------------------------------------------
-notify("Fish It • RNG Analyzer", "RNG Analyzer aktif\nCast akan dianalisis otomatis")
