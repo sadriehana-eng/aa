@@ -1,4 +1,4 @@
--- 🐟 Fish It • RNG Analyzer (Cast-Based)
+-- 🐟 Fish It • RNG Analyzer (All In One)
 -- by GPT-5 + Allexzzq
 
 if not game:IsLoaded() then
@@ -7,34 +7,67 @@ end
 
 local Players = game:GetService("Players")
 local lp = Players.LocalPlayer
-local RunService = game:GetService("RunService")
 
--- ================= DATA =================
+--------------------------------------------------
+-- UI
+--------------------------------------------------
+local gui = Instance.new("ScreenGui")
+gui.Name = "FishItRNG"
+gui.ResetOnSpawn = false
+gui.Parent = lp:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame", gui)
+frame.Size = UDim2.new(0, 320, 0, 170)
+frame.Position = UDim2.new(0, 20, 1, -190)
+frame.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+frame.BorderSizePixel = 0
+frame.Active = true
+frame.Draggable = true
+
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 12)
+
+local title = Instance.new("TextLabel", frame)
+title.Size = UDim2.new(1, 0, 0, 36)
+title.BackgroundTransparency = 1
+title.Text = "🎣 Fish It • RNG Analyzer"
+title.Font = Enum.Font.GothamBold
+title.TextSize = 16
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+local label = Instance.new("TextLabel", frame)
+label.Position = UDim2.new(0, 10, 0, 42)
+label.Size = UDim2.new(1, -20, 1, -52)
+label.BackgroundTransparency = 1
+label.TextWrapped = true
+label.TextYAlignment = Top
+label.TextXAlignment = Left
+label.Font = Enum.Font.Gotham
+label.TextSize = 14
+label.TextColor3 = Color3.fromRGB(200, 200, 200)
+
+--------------------------------------------------
+-- DATA
+--------------------------------------------------
 local MAX_CAST = 15
-local CastCount = 0
-local CastIntervals = {}
+local CastTimes = {}
+local TotalCast = 0
 
--- ================= UI LINK =================
-local function updateUI(status, chance, cast, advice)
-	if _G.FishItRNG_UI and _G.FishItRNG_UI.Update then
-		_G.FishItRNG_UI.Update(status, chance, cast, advice)
-	end
-end
-
--- ================= ANALYSIS =================
+--------------------------------------------------
+-- ANALYSIS
+--------------------------------------------------
 local function analyze()
-	if #CastIntervals < 5 then
-		return "UNKNOWN", "?", "Mengumpulkan data..."
+	if #CastTimes < 5 then
+		return "UNKNOWN", "?", "Menunggu data cast..."
 	end
 
 	local variance = 0
-	for i = 2, #CastIntervals do
-		variance += math.abs(CastIntervals[i] - CastIntervals[i-1])
+	for i = 2, #CastTimes do
+		variance += math.abs(CastTimes[i] - CastTimes[i-1])
 	end
-	variance /= (#CastIntervals - 1)
+	variance /= (#CastTimes - 1)
 
 	if variance < 0.4 then
-		return "LOW", "RENDAH (relatif)", "Cast terlalu konsisten → pindah pulau"
+		return "LOW", "RENDAH (relatif)", "RNG stagnan → pindah pulau"
 	elseif variance < 1 then
 		return "MEDIUM", "SEDANG (relatif)", "RNG normal"
 	else
@@ -42,26 +75,46 @@ local function analyze()
 	end
 end
 
--- ================= CAST DETECTION =================
--- Deteksi lempar pancing (universal)
-lp.CharacterAdded:Connect(function(char)
-	local toolConn
+--------------------------------------------------
+-- UPDATE UI
+--------------------------------------------------
+local function updateUI()
+	local status, chance, advice = analyze()
+	label.Text =
+		"Status Pulau : "..status..
+		"\nPeluang Secret : "..chance..
+		"\nTotal Cast : "..TotalCast..
+		"\n\n"..advice
+end
+
+--------------------------------------------------
+-- CAST DETECTION (STABIL)
+--------------------------------------------------
+local function hookCharacter(char)
 	char.ChildAdded:Connect(function(obj)
 		if obj:IsA("Tool") then
-			toolConn = obj.Activated:Connect(function()
-				CastCount += 1
-				table.insert(CastIntervals, os.clock())
-
-				if #CastIntervals > MAX_CAST then
-					table.remove(CastIntervals, 1)
+			obj.Activated:Connect(function()
+				TotalCast += 1
+				table.insert(CastTimes, os.clock())
+				if #CastTimes > MAX_CAST then
+					table.remove(CastTimes, 1)
 				end
-
-				local status, chance, advice = analyze()
-				updateUI(status, chance, CastCount, advice)
+				updateUI()
 			end)
 		end
 	end)
-end)
+end
 
+if lp.Character then
+	hookCharacter(lp.Character)
+end
+lp.CharacterAdded:Connect(hookCharacter)
+
+--------------------------------------------------
 -- INIT
-updateUI("UNKNOWN", "?", 0, "RNG Analyzer aktif\nMulai casting...")
+--------------------------------------------------
+label.Text =
+	"Status Pulau : UNKNOWN"..
+	"\nPeluang Secret : ?"..
+	"\nTotal Cast : 0"..
+	"\n\nRNG Analyzer aktif\nMulai melempar pancing..."
